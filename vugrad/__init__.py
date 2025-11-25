@@ -4,5 +4,6 @@ if sys.version_info < (3,6):
 
 from .core import TensorNode, OpNode, Module, Add, Multiply, MatrixMultiply
 from .ops import *
+from .custom_ops import *
 from .modules import *
 from .functions import load_synth, celoss, softmax

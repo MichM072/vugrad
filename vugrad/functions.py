@@ -1,4 +1,5 @@
 from .ops import Log, Select, Sum, Normalize, Exp, Sigmoid, RowMax, Expand, RowSum, Unsqueeze, Id
+from .custom_ops import Relu
 from .mnist import init, load
 from .core import TensorNode
 
@@ -165,3 +166,7 @@ def logsoftmax(x):
     res = diff - denominator
 
     return res
+
+def relu(x):
+    """Custom relu function for q9"""
+    return Relu.do_forward(x)
