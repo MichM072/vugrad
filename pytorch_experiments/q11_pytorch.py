@@ -5,6 +5,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from tqdm import tqdm
+import optuna
 
 def build_data_loaders(batch_size):
     transform = transforms.Compose(
@@ -31,7 +32,7 @@ class NeuralNet(torch.nn.Module):
     Slightly altered implementation based on https://docs.pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html#define-a-loss-function-and-optimizer
     """
 
-    def __init__(self, lr=0.001, momentum=0.9):
+    def __init__(self, lr=0.001, momentum=0.9, model_name=None):
         super().__init__()
         self.conv1 = nn.Conv2d(3, 6, 5)
         self.pool = nn.MaxPool2d(2, 2)
@@ -41,7 +42,7 @@ class NeuralNet(torch.nn.Module):
         self.fc3 = nn.Linear(84, 10)
         self.optimizer = optim.SGD(self.parameters(), lr=lr, momentum=momentum)
         self.criterion = nn.CrossEntropyLoss()
-        self.model_name = 'cifar_net'
+        self.model_name = model_name if model_name is not None else 'cifar_net'
 
     def forward(self, x):
         x = self.pool(F.relu(self.conv1(x)))
@@ -52,7 +53,7 @@ class NeuralNet(torch.nn.Module):
         x = self.fc3(x)
         return x
 
-    def train_net(self, trainloader, epochs=5):
+    def train_net(self, trainloader, save_model=False, epochs=5):
         for epoch in tqdm(range(epochs), label='Training Epochs'):
 
             running_loss = 0.0
@@ -61,7 +62,7 @@ class NeuralNet(torch.nn.Module):
 
                 self.optimizer.zero_grad()
 
-                outputs = net(inputs)
+                outputs = self(inputs)
                 loss = self.criterion(outputs, labels)
                 loss.backward()
                 self.optimizer.step()
@@ -72,12 +73,15 @@ class NeuralNet(torch.nn.Module):
                     running_loss = 0.0
 
         print('Finished Training')
+        self.save_model() if save_model else None
+        return loss.item() if loss.item() is not None else 0.0
 
     def predict(self, test_images):
         return self(test_images)
 
-    def test_net(self, testloader, classes, individual_class=False):
+    def test_net(self, testloader, classes, load_model=False, individual_class=False):
         # prepare to count predictions for each class
+        self.load_model() if load_model else None
         correct_pred = {classname: 0 for classname in classes}
         total_pred = {classname: 0 for classname in classes}
         correct = 0
@@ -107,19 +111,43 @@ class NeuralNet(torch.nn.Module):
         return correct // total
 
 
-def load_model(self, path=f'cifar_net.pth'):
-    if self.model_name is not None:
-        path = f'{self.model_name}.pth'
-    self.load_state_dict(torch.load(path))
+    def load_model(self, path=f'cifar_net.pth'):
+        if self.model_name is not None:
+            path = f'{self.model_name}.pth'
+        self.load_state_dict(torch.load(path))
 
 
-def save_model(self, path='cifar_net.pth'):
-    if self.model_name is not None:
-        path = f'{self.model_name}.pth'
-    torch.save(self.state_dict(), path)
+    def save_model(self, path='cifar_net.pth'):
+        if self.model_name is not None:
+            path = f'{self.model_name}.pth'
+        torch.save(self.state_dict(), path)
+
+def objective(trial):
+    lr = trial.suggest_float('lr', 0.0001, 0.1, log=True)
+    momentum = trial.suggest_float('momentum', 0.5, 0.99)
+    epochs = trial.suggest_int('epochs', 1, 10)
+    batch_size = trial.suggest_categorical('batch_size', [2, 4, 8, 10])
+    trainloader, testloader, classes = build_data_loaders(batch_size=batch_size)
+    net = NeuralNet(lr, momentum)
+    return net.train_net(trainloader, epochs=epochs)
+
+def final_evaluation(param_dict):
+    trainloader, testloader, classes = build_data_loaders(batch_size=10)
+    model_name = f'cifar_net_{param_dict.items()}'
+    net = NeuralNet(param_dict['lr'], param_dict['momentum'], model_name=model_name)
+    net.train_net(trainloader, epochs=param_dict['epochs'], save_model=True)
+    return net.test_net(testloader, classes, individual_class=True)
+
 
 if __name__ == '__main__':
-    net = NeuralNet()
-    trainloader, testloader, classes = build_data_loaders(batch_size=4)
-    net.train_net(trainloader, epochs=5)
-    net.test_net(testloader, classes, individual_class=True)
+    study = optuna.create_study(direction='maximize',
+                                storage='sqlite:///optuna.db',
+                                study_name='cifar_net_q11',
+                                load_if_exists=True,)
+    study.optimize(objective, n_trials=100)
+    best_params = study.best_params
+    print(f'Best params: {best_params}')
+    print("Final evaluation:")
+    final_score = final_evaluation(best_params)
+    print(f'Final accuracy: {final_score:.2f}')
+
