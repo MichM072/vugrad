@@ -149,7 +149,7 @@ class NeuralNet(torch.nn.Module):
         torch.save(self.state_dict(), path)
 
 def objective(trial):
-    lr = trial.suggest_float('lr', 0.0001, 0.1, log=True, step=0.001)
+    lr = trial.suggest_float('lr', 0.0001, 0.1, step=0.0001)
     momentum = trial.suggest_float('momentum', 0.3, 0.99, step=0.01)
     epochs = trial.suggest_int('epochs', 10, 30, step=1)
     batch_size = trial.suggest_categorical('batch_size', [8, 16, 32, 64])
