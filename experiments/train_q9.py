@@ -4,6 +4,7 @@ import numpy as np
 
 # for running from the command line
 from argparse import ArgumentParser
+import matplotlib.pyplot as plt
 
 import vugrad as vg
 
@@ -169,7 +170,7 @@ mlp_relu = MLP_Relu(input_size=num_features, output_size=num_classes)
 n, m = xtrain.shape
 b = args.batch_size
 
-val_accs = [0., 0.]
+val_accs = [[], []]
 
 for i, mlp in enumerate([mlp, mlp_relu]):
     print(f'\n## Starting training for model: {mlp.__name__()}')
@@ -187,7 +188,7 @@ for i, mlp in enumerate([mlp, mlp_relu]):
 
         o.clear() # gc the computation graph
         print(f'       accuracy: {acc:.4}')
-        val_accs[i] = acc
+        val_accs[i].append(acc)
 
         cl = 0.0 # running sum of the training loss
 
@@ -235,5 +236,15 @@ for i, mlp in enumerate([mlp, mlp_relu]):
 
         print(f'   running loss: {cl/n:.4}')
 
+fig, ax = plt.subplots()
+print("Final accuracies:")
 for acc, mlp in zip(val_accs, ["Sigmoid", "Relu"]):
-    print(f'{mlp}: {acc:.4}')
+    x = np.arange(len(acc))
+    ax.plot(x, acc, label=mlp)
+    ax.set_xlabel('epoch')
+    ax.set_xticks(x)
+    ax.set_ylabel('accuracy')
+    ax.legend()
+    print(f"{mlp}: {acc[-1]:.4}")
+plt.savefig('q9_results.png')
+plt.show()
