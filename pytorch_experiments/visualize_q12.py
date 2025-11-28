@@ -13,8 +13,8 @@ def plot_optuna_results(study, variant):
     opt_param_importances_plot = vis.plot_param_importances(study)
 
     # Save all plots
-    opt_history_plot.write_image("optuna_history.png")
-    opt_param_importances_plot.write_image("optuna_param_importances.png")
+    opt_history_plot.write_image(f"optuna_history_{variant}.png")
+    opt_param_importances_plot.write_image(f"optuna_param_importances_{variant}.png")
 
     opt_history_plot.show()
     opt_param_importances_plot.show()
@@ -25,23 +25,23 @@ def plot_optuna_results(study, variant):
     plt.plot(x, loss_best_trial)
     plt.xlabel('Epoch')
     plt.ylabel('Loss')
-    plt.savefig('q11_best_trial.png')
-    plt.show()
+    plt.savefig(f'q12_{variant}_best_trial.png')
+    # plt.show()
     return loss_best_trial
 
 if __name__ == "__main__":
     variants = [0, 1, 2, 3]
     all_losses = []
     for variant in variants:
-        study = optuna.load_study(study_name=f"cifar_net_q12_{variants}",
+        study = optuna.load_study(study_name=f"cifar_net_q12_{variant}",
                                   storage="sqlite:///optuna.db")
         loss = plot_optuna_results(study, variant=0)
         all_losses.append(loss)
 
     fig, ax = plt.subplots()
-    for loss in all_losses:
+    for i, loss in enumerate(all_losses):
         x = np.arange(1, len(loss) + 1)
-        ax.plot(x, loss, label=f"Variant {variants.index(loss[0])}")
+        ax.plot(x, loss, label=f"Variant {i}")
         ax.set_xlabel('Epoch')
         ax.set_ylabel('Loss')
         ax.legend()

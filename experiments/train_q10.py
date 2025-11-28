@@ -64,11 +64,12 @@ class MLP_Relu(vg.Module):
         super().__init__()
 
         hidden_size = hidden_mult * input_size
-        hidden_size2 = hidden2_mult * hidden_size
+        hidden_size2 = int(hidden2_mult * hidden_size)
         # -- There is no common wisdom on how big the hidden size should be, apart from the idea
         #    that it should be strictly _bigger_ than the input if at all possible.
 
         self.layer1 = vg.Linear(input_size, hidden_size)
+        self.residual_layer = vg.Linear(hidden_size, hidden_size2)
         self.layer2 = vg.Linear(hidden_size, hidden_size2)
         self.layer3 = vg.Linear(hidden_size2, output_size)
         # -- The linear layer (without activation) is implemented in vugrad. We simply instantiate these modules, and
@@ -79,6 +80,7 @@ class MLP_Relu(vg.Module):
         assert len(input.size()) == 2
 
         # first layer
+        hidden_pre_act = self.layer1(input)
         hidden = self.layer1(input)
 
         # non-linearity
@@ -90,7 +92,8 @@ class MLP_Relu(vg.Module):
         hidden2 = self.layer2(hidden)
 
         # residual connection
-        hidden2 += hidden
+        residual = self.residual_layer(hidden_pre_act)
+        hidden2 += residual
 
         output = self.layer3(hidden2)
 
@@ -104,7 +107,7 @@ class MLP_Relu(vg.Module):
 
     def parameters(self):
 
-        return self.layer1.parameters() + self.layer2.parameters() + self.layer3.parameters()
+        return self.layer1.parameters() + self.layer2.parameters() + self.layer3.parameters() + self.residual_layer.parameters()
 
     @staticmethod
     def __name__():

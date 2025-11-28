@@ -205,14 +205,16 @@ def final_evaluation(param_dict):
 if __name__ == '__main__':
     score_per_variant = []
     for global_variant in range(4):
-        study = optuna.create_study(direction='minimize',
-                                    storage='sqlite:///optuna.db',
-                                    study_name=f'cifar_net_q12_{global_variant}',
-                                    load_if_exists=True,
-                                    pruner=optuna.pruners.MedianPruner(n_startup_trials=5,
-                                                                       n_warmup_steps=10,
-                                                                       interval_steps=1))
-        study.optimize(objective, n_trials=5)
+        # study = optuna.create_study(direction='minimize',
+        #                             storage='sqlite:///optuna.db',
+        #                             study_name=f'cifar_net_q12_{global_variant}',
+        #                             load_if_exists=True,
+        #                             pruner=optuna.pruners.MedianPruner(n_startup_trials=5,
+        #                                                                n_warmup_steps=10,
+        #                                                                interval_steps=1))
+        # study.optimize(objective, n_trials=5)
+        study = optuna.load_study(study_name=f"cifar_net_q12_{global_variant}",
+                                  storage="sqlite:///optuna.db")
         best_params = study.best_params
         print(f'Best params: {best_params}')
         print("Final evaluation:")
