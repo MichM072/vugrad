@@ -4,6 +4,7 @@ import torchvision.transforms as transforms
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from optuna import trial
 from tqdm import tqdm
 import optuna
 
@@ -53,10 +54,12 @@ class NeuralNet(torch.nn.Module):
         x = self.fc3(x)
         return x
 
-    def train_net(self, trainloader, save_model=False, epochs=5):
-        for epoch in tqdm(range(epochs), label='Training Epochs'):
-
+    def train_net(self, trainloader, save_model=False, epochs=5, trial=None):
+        # Unsure if needed but added to be sure the model is set to train mode.
+        self.train()
+        for epoch in tqdm(range(epochs), desc='Training Epochs'):
             running_loss = 0.0
+            epoch_loss_sum = 0.0
             for i, data in enumerate(trainloader, 0):
                 inputs, labels = data
 
@@ -68,9 +71,31 @@ class NeuralNet(torch.nn.Module):
                 self.optimizer.step()
 
                 running_loss += loss.item()
+                epoch_loss_sum += loss.item()
                 if i % 2000 == 1999:
                     print(f'[{epoch + 1}, {i + 1:5d}] loss: {running_loss / 2000:.3f}')
                     running_loss = 0.0
+
+            epoch_loss = epoch_loss_sum / len(trainloader.dataset)
+
+            # Prevent trials that show no improvement.
+            if trial is not None:
+                trial.report(epoch_loss, epoch)
+
+                if trial.should_prune():
+                    print(f"Trial was pruned at epoch {epoch}")
+                    raise optuna.TrialPruned()
+
+
+        # Final training loss:
+        # Set to eval mode to "evaluate" on the train set.
+        self.eval()
+        with torch.no_grad():
+            for data in trainloader:
+                inputs, labels = data
+
+                outputs = self(inputs)
+                loss = self.criterion(outputs, labels)
 
         print('Finished Training')
         self.save_model() if save_model else None
@@ -107,8 +132,9 @@ class NeuralNet(torch.nn.Module):
                 print(f'Accuracy for class: {classname:5s} is {accuracy:.1f} %')
 
         # print overall accuracy
-        print(f'Overall accuracy: {100 * correct // total} %')
-        return correct // total
+        overall_accuracy = 100 * correct / total
+        print(f'Overall accuracy: {overall_accuracy} %')
+        return overall_accuracy
 
 
     def load_model(self, path=f'cifar_net.pth'):
@@ -123,13 +149,13 @@ class NeuralNet(torch.nn.Module):
         torch.save(self.state_dict(), path)
 
 def objective(trial):
-    lr = trial.suggest_float('lr', 0.0001, 0.1, log=True)
-    momentum = trial.suggest_float('momentum', 0.5, 0.99)
-    epochs = trial.suggest_int('epochs', 1, 10)
-    batch_size = trial.suggest_categorical('batch_size', [2, 4, 8, 10])
+    lr = trial.suggest_float('lr', 0.0001, 0.1, log=True, step=0.001)
+    momentum = trial.suggest_float('momentum', 0.3, 0.99, step=0.01)
+    epochs = trial.suggest_int('epochs', 10, 30, step=1)
+    batch_size = trial.suggest_categorical('batch_size', [8, 16, 32, 64])
     trainloader, testloader, classes = build_data_loaders(batch_size=batch_size)
     net = NeuralNet(lr, momentum)
-    return net.train_net(trainloader, epochs=epochs)
+    return net.train_net(trainloader, epochs=epochs, trial=trial)
 
 def final_evaluation(param_dict):
     trainloader, testloader, classes = build_data_loaders(batch_size=10)
@@ -140,11 +166,14 @@ def final_evaluation(param_dict):
 
 
 if __name__ == '__main__':
-    study = optuna.create_study(direction='maximize',
+    study = optuna.create_study(direction='minimize',
                                 storage='sqlite:///optuna.db',
                                 study_name='cifar_net_q11',
-                                load_if_exists=True,)
-    study.optimize(objective, n_trials=100)
+                                load_if_exists=True,
+                                pruner=optuna.pruners.MedianPruner(n_startup_trials=5,
+                                                                   n_warmup_steps=10,
+                                                                   interval_steps=1))
+    study.optimize(objective, n_trials=50)
     best_params = study.best_params
     print(f'Best params: {best_params}')
     print("Final evaluation:")
